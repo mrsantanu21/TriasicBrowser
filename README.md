@@ -68,7 +68,7 @@ Grab the latest installer from the [Releases page](../../releases).
 
 ```bash
 # Clone the repo
-git clone https://github.com/<your-username>/triasic-browser.git
+git clone https://github.com/<mrsantanu21>/triasic-browser.git
 cd triasic-browser
 
 # Install dependencies
@@ -99,12 +99,6 @@ The packaged installer will be output to the `dist/` folder.
 - [ ] macOS and Linux packaged builds
 - [ ] Broader Chrome extension (MV3) compatibility
 - [ ] Automated E2E test suite (Playwright)
-
----
-
-## 📄 License
-
-*Add your chosen license here (e.g. MIT).*
 
 ---
 
