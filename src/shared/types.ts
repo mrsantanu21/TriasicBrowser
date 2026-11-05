@@ -16,6 +16,29 @@ export interface Tab {
   isLoading: boolean
   isPinned: boolean
   isActive: boolean
+  groupId: string | null
+  groupTitle?: string | null
+}
+
+export interface TabGroup {
+  id: string
+  title: string
+  color: string
+  collapsed: boolean
+}
+
+export interface TabSnapshot {
+  id: string
+  url: string
+  title: string
+  isPinned: boolean
+  groupId: string | null
+}
+
+export interface TabWindowSnapshot {
+  tabs: TabSnapshot[]
+  activeTabId: string
+  groups: TabGroup[]
 }
 
 export interface BrowserSettings {

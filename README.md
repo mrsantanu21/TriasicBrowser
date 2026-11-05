@@ -11,13 +11,13 @@ Inspired by the best parts of Arc, Brave, Edge, and Chrome — built with a uniq
 | Category | What's included |
 |---|---|
 | 🎨 **Design & Shell** | Frameless titlebar, custom visual identity, responsive layout, dark/light/custom themes |
-| 🌐 **Core Browsing** | Tabbed browsing (open, close, duplicate, pin), address/search bar, back/forward/refresh/home, HTTPS security badge |
-| 🔖 **Bookmarks & History** | Full bookmark manager with folders, searchable browsing history |
+| 🌐 **Core Browsing** | Multi-tab browsing, address/search bar, back/forward/refresh, HTTPS security badge |
+| 🗂️ **Tab Management** | Search open tabs, pinned tabs kept at the front, named tab groups, drag to reorder, recently closed tab and window restore, optional vertical tab rail |
 | ⬇️ **Downloads** | Slide-in download panel with live progress, open/reveal actions |
 | 🕵️ **Incognito Mode** | Separate private window with memory-only session — nothing touches disk |
 | 🛡️ **Privacy** | Built-in ad/tracker blocker with a real-time blocked-request counter |
 | 🔑 **Password Manager** | OS-encrypted credential storage (DPAPI/Keychain/libsecret), autofill, and a full password manager UI |
-| 🔄 **Session Restore** | Automatically reopens your tabs and windows after restart |
+| 🔄 **Session Restore** | Automatically reopens regular windows and all their tabs after restart; older single-page sessions remain supported |
 | 🪟 **Multi-Window** | Open and manage independent browser windows |
 | 🧩 **Extensions** | Load unpacked Chrome extensions from disk |
 | 📸 **Screenshot Tool** | One-shortcut viewport capture, saved locally with a confirmation toast |
@@ -43,6 +43,8 @@ The Android edition is a touch-friendly mobile browser for Android 6.0 and newer
 |---|---|
 | `Ctrl+T` | New tab |
 | `Ctrl+W` | Close tab |
+| `Ctrl+Shift+T` | Reopen the most recently closed tab |
+| `Ctrl+Shift+A` | Focus open-tab search |
 | `Ctrl+N` | New window |
 | `Ctrl+Shift+N` | New incognito window |
 | `Ctrl+J` | Toggle download panel |
@@ -58,11 +60,9 @@ The Android edition is a touch-friendly mobile browser for Android 6.0 and newer
 - **[Electron](https://www.electronjs.org/)** — cross-platform desktop shell
 - **[React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)** — UI layer
 - **[Vite](https://vitejs.dev/)** — renderer bundling
-- **[better-sqlite3](https://github.com/WiseLibs/better-sqlite3)** — local storage (history, bookmarks, settings)
 - **[@ghostery/adblocker-electron](https://github.com/ghostery/adblocker)** — ad/tracker blocking
 - **[electron-updater](https://www.electron.build/auto-update)** — auto-updates
 - **[electron-log](https://github.com/megahertz/electron-log)** — centralized logging
-- **[Framer Motion](https://www.framer.com/motion/)** — UI animations
 
 ---
 

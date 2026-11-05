@@ -16,7 +16,8 @@
  * WebContentsView for the window that fired the event.
  */
 import { app, ipcMain, BrowserWindow, session, dialog } from 'electron'
-import { createWindow, getContextFromSender, getContext } from './windows/WindowManager'
+import { createWindow, getContextFromSender, getContext, createTab, activateTab, closeTab, getTabs, updateWindowBounds, snapshotTabs, listRecentlyClosedWindows, takeRecentlyClosedWindow } from './windows/WindowManager'
+import type { TabWindowSnapshot } from '../shared/types'
 import {
   hookSession,
   openDownload,
@@ -39,7 +40,7 @@ import {
   getPassword,
   deleteById as deleteCredential,
 } from './passwords/PasswordStore'
-import { setupAutofillForContext, performAutofill } from './passwords/AutofillManager'
+import { setupAutofillForContext, setupAutofillForTab, performAutofill } from './passwords/AutofillManager'
 import { saveSession, loadSession } from './session/SessionRestore'
 import {
   loadExtension,
@@ -62,7 +63,7 @@ function broadcastAdblockStats(): void {
 }
 
 /** Spin up a new window, hook its session for downloads, and enable autofill. */
-function spawnWindow(options: { incognito?: boolean; initialUrl?: string } = {}): BrowserWindow {
+function spawnWindow(options: { incognito?: boolean; initialUrl?: string; initialTab?: { id?: string; isPinned?: boolean; groupId?: string | null } } = {}): BrowserWindow {
   const win = createWindow(options)
   const ctx = getContext(win.id)
   if (ctx) {
@@ -97,6 +98,30 @@ ipcMain.on('window:openIncognito', () => {
   }
 })
 ipcMain.on('window:openNew', () => spawnWindow())
+
+// ─── IPC: Tabs ────────────────────────────────────────────────────────────────
+ipcMain.handle('tabs:get', (event) => { const ctx = getContextFromSender(event.sender); return ctx ? getTabs(ctx) : [] })
+ipcMain.on('tabs:new', (event, url?: string) => { const ctx = getContextFromSender(event.sender); if (ctx) { const id = createTab(ctx, url ? resolveUrl(url) : 'https://www.google.com'); const tab = ctx.tabs.get(id); if (tab) setupAutofillForTab(ctx, tab.view.webContents) } })
+ipcMain.on('tabs:activate', (event, id: string) => { const ctx = getContextFromSender(event.sender); if (ctx) activateTab(ctx, id) })
+ipcMain.on('tabs:close', (event, id: string) => { const ctx = getContextFromSender(event.sender); if (ctx) closeTab(ctx, id) })
+ipcMain.on('tabs:pin', (event, id: string) => { const ctx = getContextFromSender(event.sender); const tab = ctx?.tabs.get(id); if (ctx && tab) { tab.pinned = !tab.pinned; tab.groupId = tab.pinned ? null : tab.groupId; event.sender.send('tabs:update', getTabs(ctx)) } })
+ipcMain.on('tabs:group', (event, id: string, title: string) => { const ctx = getContextFromSender(event.sender); const tab = ctx?.tabs.get(id); if (!ctx || !tab || tab.pinned) return; const label = title || 'New group'; let group = ctx.groups.find((item) => item.title === label); if (!group) { group = { id: `group-${Date.now()}`, title: label, color: '#a855f7', collapsed: false }; ctx.groups.push(group) } tab.groupId = group.id; event.sender.send('tabs:update', getTabs(ctx)) })
+ipcMain.on('tabs:reorder', (event, ids: string[]) => { const ctx = getContextFromSender(event.sender); if (!ctx) return; const ordered = new Map<string, (typeof ctx.tabs extends Map<string, infer V> ? V : never)>(); for (const id of ids) { const value = ctx.tabs.get(id); if (value) ordered.set(id, value) } for (const [id, value] of ctx.tabs) if (!ordered.has(id)) ordered.set(id, value); ctx.tabs = ordered; event.sender.send('tabs:update', getTabs(ctx)) })
+ipcMain.handle('tabs:recentlyClosed', (event) => getContextFromSender(event.sender)?.recentlyClosed ?? [])
+ipcMain.handle('windows:recentlyClosed', () => listRecentlyClosedWindows())
+ipcMain.on('windows:restoreClosed', (_event, activeTabId?: string) => {
+  const state = takeRecentlyClosedWindow(activeTabId)
+  if (!state?.tabs.length) return
+  const first = state.tabs[0]
+  const win = spawnWindow({ initialUrl: first.url || 'https://www.google.com', initialTab: first })
+  const ctx = getContext(win.id)
+  if (!ctx) return
+  ctx.groups = state.groups ?? []
+  for (const tab of state.tabs.slice(1)) { const id = createTab(ctx, tab.url, tab); const restored = ctx.tabs.get(id); if (restored) setupAutofillForTab(ctx, restored.view.webContents) }
+  if (state.activeTabId) activateTab(ctx, state.activeTabId)
+})
+ipcMain.on('tabs:restoreClosed', (event, id?: string) => { const ctx = getContextFromSender(event.sender); if (!ctx) return; const index = id ? ctx.recentlyClosed.findIndex((tab) => tab.id === id) : 0; if (index < 0) return; const [tab] = ctx.recentlyClosed.splice(index, 1); if (tab) { const restoredId = createTab(ctx, tab.url || 'https://www.google.com', tab); const restored = ctx.tabs.get(restoredId); if (restored) setupAutofillForTab(ctx, restored.view.webContents) } })
+ipcMain.on('tabs:vertical', (event, enabled: boolean) => { const ctx = getContextFromSender(event.sender); if (ctx) { ctx.verticalTabs = enabled; updateWindowBounds(ctx); event.sender.send('tabs:layout', enabled) } })
 
 // ─── IPC: Navigation ──────────────────────────────────────────────────────────
 ipcMain.on('navigate', (event, rawInput: string) => {
@@ -209,16 +234,25 @@ app.whenReady().then(async () => {
 
   // Load last session (if any)
   const savedSession = loadSession()
-  const firstUrl = savedSession?.[0]?.url
+  const firstUrl = savedSession?.[0]?.tabState?.tabs?.[0]?.url ?? savedSession?.[0]?.url
 
   // Create the primary window with restored URL (or google.com)
-  spawnWindow({ initialUrl: firstUrl })
+  const restoreWindow = (saved: NonNullable<typeof savedSession>[number]): void => {
+    const state = saved.tabState
+    const first = state?.tabs?.[0]
+    const win = spawnWindow({ initialUrl: first?.url ?? saved.url, initialTab: first })
+    const ctx = getContext(win.id)
+    if (!ctx || !state) return
+    ctx.groups = state.groups ?? []
+    for (const tab of state.tabs.slice(1)) { const id = createTab(ctx, tab.url, tab); const restored = ctx.tabs.get(id); if (restored) setupAutofillForTab(ctx, restored.view.webContents) }
+    if (state.activeTabId) activateTab(ctx, state.activeTabId)
+  }
+  if (savedSession?.length) restoreWindow(savedSession[0])
+  else spawnWindow({ initialUrl: firstUrl })
 
   // Restore additional windows from last session
   if (savedSession && savedSession.length > 1) {
-    for (const { url } of savedSession.slice(1)) {
-      spawnWindow({ initialUrl: url })
-    }
+    for (const saved of savedSession.slice(1)) restoreWindow(saved)
   }
 
   // Hook default session downloads (incognito sessions hooked in spawnWindow above)
@@ -248,14 +282,14 @@ app.whenReady().then(async () => {
 // Save session on quit (skips incognito windows)
 app.on('before-quit', () => {
   log.info('[TriasicBrowser] App quitting, saving session...')
-  const windows: { url: string; title: string }[] = []
+  const windows: { url: string; title: string; tabState?: TabWindowSnapshot }[] = []
   for (const win of BrowserWindow.getAllWindows()) {
     if (win.isDestroyed()) continue
     const ctx = getContext(win.id)
     if (!ctx || ctx.isIncognito) continue
     const url = ctx.pageView.webContents.getURL()
     const title = ctx.pageView.webContents.getTitle()
-    windows.push({ url, title })
+    windows.push({ url, title, tabState: snapshotTabs(ctx) })
   }
   saveSession(windows)
 })

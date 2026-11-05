@@ -8,12 +8,14 @@
 import { app } from 'electron'
 import { join } from 'node:path'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import type { TabWindowSnapshot } from '../../shared/types'
 
 const SESSION_PATH = join(app.getPath('userData'), 'session.json')
 
 interface SavedWindow {
   url: string
   title: string
+  tabState?: TabWindowSnapshot
 }
 
 interface SessionData {
@@ -26,13 +28,16 @@ interface SessionData {
  * Filters out about:blank, file: and chrome: URLs (internal, not restorable).
  */
 export function saveSession(windows: SavedWindow[]): void {
-  const valid = windows.filter(
-    (w) =>
-      w.url &&
-      !w.url.startsWith('about:') &&
-      !w.url.startsWith('file:') &&
-      !w.url.startsWith('chrome:'),
-  )
+  const isRestorable = (url: string): boolean => Boolean(url) && !/^(about:|file:|chrome:)/i.test(url)
+  const valid = windows.flatMap((window) => {
+    if (!window.tabState) return isRestorable(window.url) ? [window] : []
+    const tabs = window.tabState.tabs.filter((tab) => isRestorable(tab.url))
+    if (!tabs.length) return []
+    const activeTabId = tabs.some((tab) => tab.id === window.tabState!.activeTabId)
+      ? window.tabState.activeTabId
+      : tabs[0].id
+    return [{ ...window, url: tabs.find((tab) => tab.id === activeTabId)!.url, tabState: { ...window.tabState, tabs, activeTabId } }]
+  })
 
   try {
     writeFileSync(
@@ -52,7 +57,10 @@ export function loadSession(): SavedWindow[] | null {
   if (!existsSync(SESSION_PATH)) return null
   try {
     const data = JSON.parse(readFileSync(SESSION_PATH, 'utf8')) as SessionData
-    return data.windows.length > 0 ? data.windows : null
+    // Older releases stored one {url,title} per window. Keep those records
+    // readable and treat each as a one-tab window.
+    const windows = Array.isArray(data.windows) ? data.windows : []
+    return windows.length > 0 ? windows : null
   } catch {
     return null
   }

@@ -17,6 +17,9 @@ import type {
   AutofillState,
   ExtensionInfo,
   BrowserSettings,
+  Tab,
+  TabSnapshot,
+  TabWindowSnapshot,
 } from '../shared/types'
 
 // ─── Typed Bridge API ─────────────────────────────────────────────────────────
@@ -94,6 +97,20 @@ export type TriasicBridge = {
 
   // ── Page state ───────────────────────────────────────────────────────────────
   onPageUpdate: (callback: (state: PageState) => void) => () => void
+  getTabs: () => Promise<Tab[]>
+  onTabsUpdate: (callback: (tabs: Tab[]) => void) => () => void
+  newTab: () => void
+  activateTab: (id: string) => void
+  closeTab: (id: string) => void
+  pinTab: (id: string) => void
+  groupTab: (id: string, title: string) => void
+  reorderTabs: (ids: string[]) => void
+  getRecentlyClosedTabs: () => Promise<TabSnapshot[]>
+  restoreClosedTab: (id?: string) => void
+  setVerticalTabs: (enabled: boolean) => void
+  onTabLayout: (callback: (vertical: boolean) => void) => () => void
+  getRecentlyClosedWindows: () => Promise<TabWindowSnapshot[]>
+  restoreClosedWindow: (activeTabId?: string) => void
 }
 
 export type SantaBridge = TriasicBridge
@@ -197,6 +214,28 @@ const bridgeApi = {
     ipcRenderer.on('page:update', listener)
     return () => ipcRenderer.removeListener('page:update', listener)
   },
+  getTabs: () => ipcRenderer.invoke('tabs:get'),
+  onTabsUpdate: (cb: (tabs: Tab[]) => void): (() => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, tabs: Tab[]) => cb(tabs)
+    ipcRenderer.on('tabs:update', listener)
+    return () => ipcRenderer.removeListener('tabs:update', listener)
+  },
+  newTab: () => ipcRenderer.send('tabs:new'),
+  activateTab: (id: string) => ipcRenderer.send('tabs:activate', id),
+  closeTab: (id: string) => ipcRenderer.send('tabs:close', id),
+  pinTab: (id: string) => ipcRenderer.send('tabs:pin', id),
+  groupTab: (id: string, title: string) => ipcRenderer.send('tabs:group', id, title),
+  reorderTabs: (ids: string[]) => ipcRenderer.send('tabs:reorder', ids),
+  getRecentlyClosedTabs: () => ipcRenderer.invoke('tabs:recentlyClosed'),
+  restoreClosedTab: (id?: string) => ipcRenderer.send('tabs:restoreClosed', id),
+  setVerticalTabs: (enabled: boolean) => ipcRenderer.send('tabs:vertical', enabled),
+  onTabLayout: (cb: (vertical: boolean) => void): (() => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, vertical: boolean) => cb(vertical)
+    ipcRenderer.on('tabs:layout', listener)
+    return () => ipcRenderer.removeListener('tabs:layout', listener)
+  },
+  getRecentlyClosedWindows: () => ipcRenderer.invoke('windows:recentlyClosed'),
+  restoreClosedWindow: (activeTabId?: string) => ipcRenderer.send('windows:restoreClosed', activeTabId),
 } satisfies TriasicBridge
 
 // ─── Expose to renderer via window.triasicBridge & window.santaBridge ─────────

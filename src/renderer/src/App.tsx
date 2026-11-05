@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, type KeyboardEvent } from 'react'
-import type { PageState, DownloadItem, AdblockStats, Credential, AutofillState, ExtensionInfo, BrowserSettings } from '../../shared/types'
+import type { PageState, DownloadItem, AdblockStats, Credential, AutofillState, ExtensionInfo, BrowserSettings, Tab, TabSnapshot, TabWindowSnapshot } from '../../shared/types'
 import AdblockBadge from './components/AdblockBadge'
 import DownloadPanel from './components/DownloadPanel'
 import ScreenshotToast from './components/ScreenshotToast'
@@ -49,6 +49,20 @@ declare global {
       getSettings: () => Promise<BrowserSettings>
       updateSettings: (partial: Partial<BrowserSettings>) => Promise<BrowserSettings>
       onPageUpdate: (cb: (state: PageState) => void) => () => void
+      getTabs: () => Promise<Tab[]>
+      onTabsUpdate: (cb: (tabs: Tab[]) => void) => () => void
+      newTab: () => void
+      activateTab: (id: string) => void
+      closeTab: (id: string) => void
+      pinTab: (id: string) => void
+      groupTab: (id: string, title: string) => void
+      reorderTabs: (ids: string[]) => void
+      getRecentlyClosedTabs: () => Promise<TabSnapshot[]>
+      restoreClosedTab: (id?: string) => void
+      setVerticalTabs: (enabled: boolean) => void
+      onTabLayout: (cb: (vertical: boolean) => void) => () => void
+      getRecentlyClosedWindows: () => Promise<TabWindowSnapshot[]>
+      restoreClosedWindow: (activeTabId?: string) => void
     }
     santaBridge?: Window['triasicBridge']
   }
@@ -161,6 +175,12 @@ export default function App() {
     isLoading: true,
   })
   const [inputValue, setInputValue] = useState('https://www.google.com')
+  const [tabs, setTabs] = useState<Tab[]>([])
+  const [tabSearch, setTabSearch] = useState('')
+  const [verticalTabs, setVerticalTabs] = useState(false)
+  const [recentlyClosed, setRecentlyClosed] = useState<TabSnapshot[]>([])
+  const [showClosedTabs, setShowClosedTabs] = useState(false)
+  const [recentlyClosedWindows, setRecentlyClosedWindows] = useState<TabWindowSnapshot[]>([])
   const [isFocused, setIsFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -195,6 +215,7 @@ export default function App() {
   // ── Initialise on mount ────────────────────────────────────────────────────
   useEffect(() => {
     bridge.getWindowInfo().then((info) => setIsIncognito(info.isIncognito))
+    bridge.getTabs().then(setTabs)
     bridge.getAdblockStats().then(setAdblockStats)
     bridge.getAllDownloads().then(setDownloads)
     refreshCredentials()
@@ -204,6 +225,8 @@ export default function App() {
       setPage(state)
       if (!isFocused) setInputValue(state.url)
     })
+    const unsubTabs = bridge.onTabsUpdate(setTabs)
+    const unsubLayout = bridge.onTabLayout(setVerticalTabs)
     const unsubAdblock = bridge.onAdblockStats(setAdblockStats)
     const unsubDownloads = bridge.onDownloadsUpdate((items) => {
       setDownloads(items)
@@ -216,11 +239,21 @@ export default function App() {
 
     return () => {
       unsubPage()
+      unsubTabs()
+      unsubLayout()
       unsubAdblock()
       unsubDownloads()
       unsubAutofill()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const savedLayout = localStorage.getItem('triasic.verticalTabs') === 'true'
+    setVerticalTabs(savedLayout)
+    bridge.setVerticalTabs(savedLayout)
+  }, [])
+
+  useEffect(() => { localStorage.setItem('triasic.verticalTabs', String(verticalTabs)) }, [verticalTabs])
 
   // ── Sync URL input when not focused ────────────────────────────────────────
   useEffect(() => {
@@ -233,6 +266,10 @@ export default function App() {
       const ctrl = e.ctrlKey || e.metaKey
       if (ctrl && e.shiftKey && e.key.toLowerCase() === 'n') { e.preventDefault(); bridge.openIncognitoWindow() }
       if (ctrl && !e.shiftKey && e.key === 'n') { e.preventDefault(); bridge.openNewWindow() }
+      if (ctrl && !e.shiftKey && e.key.toLowerCase() === 't') { e.preventDefault(); bridge.newTab() }
+      if (ctrl && !e.shiftKey && e.key.toLowerCase() === 'w') { e.preventDefault(); const active = tabs.find((tab) => tab.isActive); if (active) bridge.closeTab(active.id) }
+      if (ctrl && e.shiftKey && e.key.toLowerCase() === 't') { e.preventDefault(); bridge.restoreClosedTab() }
+      if (ctrl && e.shiftKey && e.key.toLowerCase() === 'a') { e.preventDefault(); document.getElementById('tab-search')?.focus() }
       if (ctrl && e.key === 'j') { e.preventDefault(); setDownloadPanelOpen((o) => !o) }
       if (ctrl && e.shiftKey && e.key === 'S') { e.preventDefault(); handleScreenshot() }
       if (ctrl && e.key === 'l') {
@@ -251,7 +288,7 @@ export default function App() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [passwordManagerOpen, passwordPopoverOpen, extensionsPanelOpen, downloadPanelOpen, autofillState]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [passwordManagerOpen, passwordPopoverOpen, extensionsPanelOpen, downloadPanelOpen, autofillState, tabs]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Address bar handlers ───────────────────────────────────────────────────
   const handleKeyDown = useCallback(
@@ -461,6 +498,27 @@ export default function App() {
           </div>
         </div>
       </nav>
+
+      {/* ── Advanced tab strip ── */}
+      <section className={`tab-strip ${verticalTabs ? 'tab-strip--vertical' : ''}`} aria-label="Open tabs">
+        <div className="tab-strip-tools">
+          <input id="tab-search" className="tab-search" value={tabSearch} onChange={(e) => setTabSearch(e.target.value)} placeholder="Search tabs" aria-label="Search open tabs" />
+          <button className="tab-tool" title="Recently closed tabs and windows" onClick={async () => { const [items, windows] = await Promise.all([bridge.getRecentlyClosedTabs(), bridge.getRecentlyClosedWindows()]); setRecentlyClosed(items); setRecentlyClosedWindows(windows); setShowClosedTabs((v) => !v) }}>↶</button>
+          <button className="tab-tool" title={verticalTabs ? 'Use horizontal tabs' : 'Use vertical tabs'} onClick={() => bridge.setVerticalTabs(!verticalTabs)}>{verticalTabs ? '↔' : '↕'}</button>
+        </div>
+        <div className="tab-list" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/tab-id'); const from = tabs.findIndex((tab) => tab.id === id); const to = tabs.findIndex((tab) => tab.id === (e.target as HTMLElement).closest('[data-tab-id]')?.getAttribute('data-tab-id')); if (from >= 0 && to >= 0 && from !== to) { const next = [...tabs]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); bridge.reorderTabs(next.map((tab) => tab.id)) } }}>
+          {tabs.filter((tab) => `${tab.title} ${tab.url}`.toLowerCase().includes(tabSearch.toLowerCase())).map((tab) => (
+            <div key={tab.id} data-tab-id={tab.id} draggable onDragStart={(e) => e.dataTransfer.setData('text/tab-id', tab.id)} className={`browser-tab ${tab.isActive ? 'browser-tab--active' : ''} ${tab.isPinned ? 'browser-tab--pinned' : ''}`}>
+              <button className="browser-tab-main" onClick={() => bridge.activateTab(tab.id)} title={tab.url}><span className="browser-tab-mark">{tab.isLoading ? '◌' : tab.isPinned ? '◆' : tab.groupTitle ? '▦' : '●'}</span><span className="browser-tab-title">{tab.title || 'New Tab'}</span>{tab.groupTitle && <span className="browser-tab-group">{tab.groupTitle}</span>}</button>
+              <button className="browser-tab-action" title={tab.isPinned ? 'Unpin tab' : 'Pin tab'} onClick={() => bridge.pinTab(tab.id)}>{tab.isPinned ? '◆' : '◇'}</button>
+              <button className="browser-tab-action" title="Add to group" onClick={() => { const name = window.prompt('Tab group name', 'Work'); if (name) bridge.groupTab(tab.id, name) }}>▦</button>
+              <button className="browser-tab-action browser-tab-close" title="Close tab" onClick={() => bridge.closeTab(tab.id)}>×</button>
+            </div>
+          ))}
+          <button className="tab-add" title="New tab (Ctrl+T)" onClick={() => bridge.newTab()}>+</button>
+        </div>
+        {showClosedTabs && <div className="recent-tabs-popover"><strong>Recently closed tabs</strong>{recentlyClosed.length ? recentlyClosed.map((tab) => <button key={tab.id} onClick={() => { bridge.restoreClosedTab(tab.id); setShowClosedTabs(false) }}>{tab.title || tab.url}</button>) : <span>No recently closed tabs</span>}<strong>Windows</strong>{recentlyClosedWindows.length ? recentlyClosedWindows.map((closed, index) => <button key={`${index}-${closed.activeTabId}`} onClick={() => { bridge.restoreClosedWindow(closed.activeTabId); setShowClosedTabs(false) }}>{closed.tabs.length} tabs · {closed.tabs.find((tab) => tab.id === closed.activeTabId)?.title || 'Closed window'}</button>) : <span>No recently closed windows</span>}</div>}
+      </section>
 
       {/* ── Autofill Banner (floats below toolbar) ── */}
       {autofillState && !passwordPopoverOpen && (

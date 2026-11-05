@@ -20,15 +20,21 @@
  */
 import { getByOrigin, listAll, getPassword } from '../passwords/PasswordStore'
 import type { WindowContext } from '../windows/WindowManager'
+import type { WebContents } from 'electron'
 
 /** Attach a 'did-navigate' listener that fires 'autofill:available' when credentials exist. */
 export function setupAutofillForContext(ctx: WindowContext): void {
   // Privacy guard: never autofill in incognito
   if (ctx.isIncognito) return
 
-  ctx.pageView.webContents.on('did-navigate', () => {
+  setupAutofillForTab(ctx, ctx.pageView.webContents)
+}
+
+export function setupAutofillForTab(ctx: WindowContext, webContents: WebContents): void {
+  if (ctx.isIncognito) return
+  webContents.on('did-navigate', () => {
     try {
-      const rawUrl = ctx.pageView.webContents.getURL()
+      const rawUrl = webContents.getURL()
       if (
         !rawUrl ||
         rawUrl.startsWith('about:') ||
@@ -41,7 +47,7 @@ export function setupAutofillForContext(ctx: WindowContext): void {
       const origin = new URL(rawUrl).hostname
       const matches = getByOrigin(origin)
 
-      if (matches.length > 0 && !ctx.win.isDestroyed()) {
+      if (matches.length > 0 && !ctx.win.isDestroyed() && ctx.pageView.webContents.id === webContents.id) {
         ctx.win.webContents.send('autofill:available', {
           origin,
           credentialId: matches[0].id,

@@ -14,23 +14,29 @@ import {
 } from 'electron'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { PageState } from '../../shared/types'
+import type { PageState, Tab, TabGroup, TabSnapshot, TabWindowSnapshot } from '../../shared/types'
 
 const isDev = !app.isPackaged
 
-/** Pixels reserved for the React chrome UI (titlebar + toolbar) */
-export const TOOLBAR_HEIGHT = 72
+/** Pixels reserved for titlebar, toolbar, and the horizontal tab strip. */
+export const TOOLBAR_HEIGHT = 108
 
 // ─── Context record ───────────────────────────────────────────────────────────
 export interface WindowContext {
   win: BrowserWindow
-  pageView: WebContentsView
+  tabs: Map<string, { view: WebContentsView; pinned: boolean; groupId: string | null }>
+  activeTabId: string
+  groups: TabGroup[]
+  recentlyClosed: TabSnapshot[]
+  verticalTabs: boolean
+  readonly pageView: WebContentsView
   isIncognito: boolean
   /** The Electron Session used by pageView — may be non-persistent for incognito */
   pageSession: Session
 }
 
 const windowMap = new Map<number, WindowContext>()
+const recentlyClosedWindows: TabWindowSnapshot[] = []
 
 import { getSettings, getSearchUrlTemplate } from '../settings/SettingsStore'
 
@@ -45,7 +51,7 @@ export function resolveUrl(input: string): string {
 }
 
 // ─── Window factory ───────────────────────────────────────────────────────────
-export function createWindow(options: { incognito?: boolean; initialUrl?: string } = {}): BrowserWindow {
+export function createWindow(options: { incognito?: boolean; initialUrl?: string; initialTab?: Partial<TabSnapshot> } = {}): BrowserWindow {
   const isIncognito = options.incognito ?? false
 
   // Non-persistent partition for incognito — no 'persist:' prefix = memory only
@@ -71,27 +77,20 @@ export function createWindow(options: { incognito?: boolean; initialUrl?: string
     },
   })
 
-  const pageView = new WebContentsView({
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      session: pageSession,
-    },
-  })
-
-  windowMap.set(win.id, { win, pageView, isIncognito, pageSession })
-  win.contentView.addChildView(pageView)
+  const ctx = { win, tabs: new Map<string, { view: WebContentsView; pinned: boolean; groupId: string | null }>(), activeTabId: '', groups: [] as TabGroup[], recentlyClosed: [] as TabSnapshot[], verticalTabs: false, isIncognito, pageSession } as unknown as WindowContext
+  Object.defineProperty(ctx, 'pageView', { get: () => ctx.tabs.get(ctx.activeTabId)!.view })
+  windowMap.set(win.id, ctx)
 
   // ── Bounds management ───────────────────────────────────────────────────────
   const updateBounds = (): void => {
     const [w, h] = win.getContentSize()
-    pageView.setBounds({
-      x: 0,
-      y: TOOLBAR_HEIGHT,
-      width: w,
-      height: Math.max(0, h - TOOLBAR_HEIGHT),
-    })
+    for (const [id, tab] of ctx.tabs) {
+      const active = id === ctx.activeTabId
+      tab.view.setVisible(active)
+      tab.view.setBounds(ctx.verticalTabs
+        ? { x: active ? 220 : 0, y: 74, width: active ? Math.max(0, w - 220) : 0, height: Math.max(0, h - 74) }
+        : { x: 0, y: TOOLBAR_HEIGHT, width: active ? w : 0, height: active ? Math.max(0, h - TOOLBAR_HEIGHT) : 0 })
+    }
   }
   updateBounds()
   win.on('resize', updateBounds)
@@ -101,38 +100,15 @@ export function createWindow(options: { incognito?: boolean; initialUrl?: string
   win.on('leave-full-screen', updateBounds)
 
   // ── Cleanup ─────────────────────────────────────────────────────────────────
-  win.on('closed', () => windowMap.delete(win.id))
-
-  // ── Page state push ─────────────────────────────────────────────────────────
-  const pushPageState = (): void => {
-    if (win.isDestroyed()) return
-    const state: PageState = {
-      url: pageView.webContents.getURL(),
-      title: pageView.webContents.getTitle(),
-      canGoBack: pageView.webContents.canGoBack(),
-      canGoForward: pageView.webContents.canGoForward(),
-      isLoading: pageView.webContents.isLoading(),
+  win.on('closed', () => {
+    if (!isIncognito && ctx.tabs.size > 0) {
+      recentlyClosedWindows.unshift(snapshotTabs(ctx))
+      recentlyClosedWindows.splice(10)
     }
-    win.webContents.send('page:update', state)
-  }
-
-  pageView.webContents.on('did-navigate', pushPageState)
-  pageView.webContents.on('did-navigate-in-page', pushPageState)
-  pageView.webContents.on('page-title-updated', pushPageState)
-  pageView.webContents.on('did-start-loading', pushPageState)
-  pageView.webContents.on('did-stop-loading', pushPageState)
-
-  // External links open in OS browser, not a new Electron window
-  pageView.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
+    windowMap.delete(win.id)
   })
 
-  // ── Initial load ────────────────────────────────────────────────────────────
-  // Priority: caller-supplied URL → incognito blank → default homepage
-  const startUrl = options.initialUrl
-    ?? (isIncognito ? 'about:blank' : 'https://www.google.com')
-  pageView.webContents.loadURL(startUrl)
+  createTab(ctx, options.initialUrl ?? (isIncognito ? 'about:blank' : 'https://www.google.com'), options.initialTab)
 
   win.once('ready-to-show', () => win.show())
 
@@ -143,6 +119,89 @@ export function createWindow(options: { incognito?: boolean; initialUrl?: string
   }
 
   return win
+}
+
+function emitTabs(ctx: WindowContext): void {
+  if (ctx.win.isDestroyed()) return
+  ctx.win.webContents.send('tabs:update', getTabs(ctx))
+  const wc = ctx.pageView.webContents
+  const state: PageState = { url: wc.getURL(), title: wc.getTitle(), canGoBack: wc.canGoBack(), canGoForward: wc.canGoForward(), isLoading: wc.isLoading() }
+  ctx.win.webContents.send('page:update', state)
+}
+
+export function getTabs(ctx: WindowContext): Tab[] {
+  return [...ctx.tabs].map(([id, tab]) => ({ id, url: tab.view.webContents.getURL(), title: tab.view.webContents.getTitle() || 'New Tab', favicon: null, isLoading: tab.view.webContents.isLoading(), isPinned: tab.pinned, isActive: id === ctx.activeTabId, groupId: tab.groupId, groupTitle: ctx.groups.find((group) => group.id === tab.groupId)?.title ?? null }))
+    .sort((a, b) => Number(b.isPinned) - Number(a.isPinned) || (a.groupTitle ?? '').localeCompare(b.groupTitle ?? ''))
+}
+
+export function snapshotTabs(ctx: WindowContext): TabWindowSnapshot {
+  return { tabs: getTabs(ctx).map(({ id, url, title, isPinned, groupId }) => ({ id, url, title, isPinned, groupId })), activeTabId: ctx.activeTabId, groups: ctx.groups }
+}
+
+export function takeRecentlyClosedWindow(activeTabId?: string): TabWindowSnapshot | undefined {
+  const index = activeTabId ? recentlyClosedWindows.findIndex((window) => window.activeTabId === activeTabId) : 0
+  if (index < 0) return undefined
+  return recentlyClosedWindows.splice(index, 1)[0]
+}
+
+export function listRecentlyClosedWindows(): TabWindowSnapshot[] {
+  return [...recentlyClosedWindows]
+}
+
+export function createTab(ctx: WindowContext, url = 'https://www.google.com', options: Partial<TabSnapshot> = {}): string {
+  const id = options.id ?? randomUUID()
+  const view = new WebContentsView({ webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, session: ctx.pageSession } })
+  ctx.win.contentView.addChildView(view)
+  ctx.tabs.set(id, { view, pinned: options.isPinned ?? false, groupId: options.groupId ?? null })
+  ctx.activeTabId = id
+  const update = (): void => { if (!ctx.win.isDestroyed()) { updateWindowBounds(ctx); emitTabs(ctx) } }
+  view.webContents.on('did-navigate', update)
+  view.webContents.on('did-navigate-in-page', update)
+  view.webContents.on('page-title-updated', update)
+  view.webContents.on('did-start-loading', update)
+  view.webContents.on('did-stop-loading', update)
+  view.webContents.setWindowOpenHandler(({ url: target }) => { shell.openExternal(target); return { action: 'deny' } })
+  updateWindowBounds(ctx)
+  view.webContents.loadURL(url)
+  emitTabs(ctx)
+  return id
+}
+
+export function activateTab(ctx: WindowContext, id: string): void {
+  if (!ctx.tabs.has(id)) return
+  ctx.activeTabId = id
+  updateWindowBounds(ctx)
+  emitTabs(ctx)
+}
+
+export function closeTab(ctx: WindowContext, id: string, remember = true): void {
+  const tab = ctx.tabs.get(id)
+  if (!tab) return
+  const wc = tab.view.webContents
+  if (remember && !ctx.isIncognito) {
+    ctx.recentlyClosed.unshift({ id, url: wc.getURL(), title: wc.getTitle() || 'New Tab', isPinned: tab.pinned, groupId: tab.groupId })
+    ctx.recentlyClosed = ctx.recentlyClosed.slice(0, 20)
+  }
+  const ids = [...ctx.tabs.keys()]
+  const index = ids.indexOf(id)
+  ctx.tabs.delete(id)
+  ctx.win.contentView.removeChildView(tab.view)
+  if (!wc.isDestroyed()) wc.close()
+  if (!ctx.tabs.size) createTab(ctx)
+  else if (ctx.activeTabId === id) activateTab(ctx, ids[index - 1] ?? ids[index + 1])
+  emitTabs(ctx)
+}
+
+export function updateWindowBounds(ctx: WindowContext): void {
+  if (ctx.win.isDestroyed()) return
+  const [w, h] = ctx.win.getContentSize()
+  for (const [id, tab] of ctx.tabs) {
+    const active = id === ctx.activeTabId
+    tab.view.setVisible(active)
+    tab.view.setBounds(ctx.verticalTabs
+      ? { x: active ? 220 : 0, y: 74, width: active ? Math.max(0, w - 220) : 0, height: active ? Math.max(0, h - 74) : 0 }
+      : { x: 0, y: TOOLBAR_HEIGHT, width: active ? w : 0, height: active ? Math.max(0, h - TOOLBAR_HEIGHT) : 0 })
+  }
 }
 
 // ─── Registry accessors ───────────────────────────────────────────────────────

@@ -70,6 +70,35 @@ html, body, #root {
   z-index: 10;
 }
 
+/* ── Desktop tab strip ────────────────────────────────────────────────────── */
+.tab-strip { position: fixed; z-index: 20; top: 74px; left: 0; right: 0; height: 34px; display: flex; align-items: center; gap: 6px; padding: 3px 8px; background: #101010; border-bottom: 1px solid var(--border); color: var(--text-primary); }
+.tab-strip-tools { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.tab-search { width: 120px; height: 25px; color: var(--text-primary); background: #191919; border: 1px solid var(--border); border-radius: 6px; padding: 0 7px; outline: none; font: inherit; font-size: 11px; }
+.tab-search:focus { border-color: var(--accent); }
+.tab-tool, .tab-add { border: 0; color: #aaa; background: transparent; cursor: pointer; border-radius: 5px; height: 25px; min-width: 25px; }
+.tab-tool:hover, .tab-add:hover { background: #252525; color: white; }
+.tab-list { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.browser-tab { display: flex; align-items: center; min-width: 95px; max-width: 220px; height: 26px; border: 1px solid transparent; border-radius: 6px; background: #171717; }
+.browser-tab--active { background: #272727; border-color: #383838; }
+.browser-tab-main { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; height: 100%; padding: 0 7px; color: #bbb; border: 0; background: transparent; text-align: left; cursor: pointer; font: inherit; }
+.browser-tab--active .browser-tab-main { color: white; }
+.browser-tab-mark { color: var(--accent); font-size: 9px; }
+.browser-tab-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; }
+.browser-tab-group { max-width: 54px; overflow: hidden; color: #bd8ef0; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.browser-tab-action { height: 21px; min-width: 20px; padding: 0 3px; border: 0; color: #777; background: transparent; cursor: pointer; }
+.browser-tab-action:hover { color: white; }
+.browser-tab-close { font-size: 16px; }
+.tab-add { font-size: 18px; }
+.tab-strip--vertical { top: 74px; right: auto; bottom: 0; width: 220px; height: auto; align-items: stretch; flex-direction: column; padding: 8px; border-right: 1px solid var(--border); border-bottom: 0; }
+.tab-strip--vertical .tab-list { flex-direction: column; align-items: stretch; overflow-y: auto; overflow-x: hidden; }
+.tab-strip--vertical .browser-tab { max-width: none; flex: 0 0 30px; }
+.tab-strip--vertical .tab-search { width: 120px; }
+.recent-tabs-popover { position: absolute; top: 31px; left: 100px; width: 260px; max-height: 300px; overflow: auto; display: flex; flex-direction: column; gap: 5px; padding: 10px; background: #1b1b1b; border: 1px solid #333; border-radius: 8px; box-shadow: 0 8px 24px #0009; }
+.recent-tabs-popover strong { padding: 4px; font-size: 11px; color: #aaa; }
+.recent-tabs-popover button { overflow: hidden; padding: 7px; color: white; background: transparent; border: 0; border-radius: 4px; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.recent-tabs-popover button:hover { background: #303030; }
+.recent-tabs-popover span { padding: 6px; color: #888; }
+
 /* ── Title Bar ───────────────────────────────────────────────────────────── */
 .titlebar {
   position: relative;
