@@ -1,9 +1,9 @@
 {
   "name": "triasicbrowser",
-  "version": "0.1.0",
-  "description": "Triasic Browser — A modern custom browser built on Electron",
+  "version": "0.1.1",
+  "description": "Triasic — A modern custom browser built on Electron",
   "main": "out/main/index.js",
-  "author": "Triasic Browser",
+  "author": "Triasic",
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",

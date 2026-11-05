@@ -1,4 +1,4 @@
-# Triasic Browser
+# Triasic
 
 A modern, fast, cross-platform desktop web browser built from scratch with **Electron**, **React**, **TypeScript**, and **Node.js**.
 
@@ -29,7 +29,7 @@ Inspired by the best parts of Arc, Brave, Edge, and Chrome — built with a uniq
 
 ## 📦 Download
 
-Download the Windows installer (`.exe`) or Android app (`.apk`) from the [Releases page](../../releases). To create a release, push a version tag such as `v0.1.0`; GitHub Actions builds both files and attaches them to that release.
+Download the Windows installer (`.exe`) or Android app (`.apk`) from the [Releases page](../../releases). To create a release, push a new version tag such as `v0.1.1`; GitHub Actions builds both files and attaches them to that release.
 
 The Android edition is a touch-friendly mobile browser for Android 6.0 and newer. It includes web browsing, address/search, back and forward navigation, reload, home, and page sharing. It is a native Android WebView app; desktop-only features such as Chrome extension loading and the desktop password manager are not included in this first mobile edition.
 

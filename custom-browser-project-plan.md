@@ -8,7 +8,7 @@
 
 |                        |                                                                                                       |
 | ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| **Name**               | Triasic Browser                                                                                       |
+| **Name**               | Triasic                                                                                               |
 | **Core stack**         | Electron 30+, React 18, TypeScript 5, Vite (renderer bundling), Node.js                               |
 | **Target OS**          | Windows, macOS, Linux                                                                                 |
 | **Design inspiration** | Arc (sidebar/spaces), Brave (privacy + shields), Edge (collections/vertical tabs), Chrome (stability) |

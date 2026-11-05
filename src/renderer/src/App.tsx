@@ -357,7 +357,7 @@ export default function App() {
         <div className="titlebar-drag-region" />
         <div className="titlebar-brand">
           <span className="brand-icon">{isIncognito ? <Icons.Incognito /> : <Icons.Logo />}</span>
-          <span className="brand-name">{isIncognito ? 'Incognito' : 'Triasic Browser'}</span>
+          <span className="brand-name">{isIncognito ? 'Incognito' : 'Triasic'}</span>
           {isIncognito && <span className="incognito-pill" aria-label="Incognito mode active">Private</span>}
         </div>
         <div className="titlebar-title" aria-live="polite">

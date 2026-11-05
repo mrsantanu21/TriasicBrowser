@@ -63,7 +63,7 @@ export function createWindow(options: { incognito?: boolean; initialUrl?: string
     : session.defaultSession
 
   const win = new BrowserWindow({
-    title: isIncognito ? 'Triasic Browser - Incognito' : 'Triasic Browser',
+    title: isIncognito ? 'Triasic - Incognito' : 'Triasic',
     width: 1280,
     height: 820,
     minWidth: 860,
