@@ -41,5 +41,5 @@ nsis:
 
 publish:
   provider: github
-  owner: triasicbrowser
-  repo: triasicbrowser
+  owner: mrsantanu21
+  repo: TriasicBrowser

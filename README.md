@@ -29,9 +29,11 @@ Inspired by the best parts of Arc, Brave, Edge, and Chrome — built with a uniq
 
 ## 📦 Download
 
-Grab the latest installer from the [Releases page](../../releases).
+Download the Windows installer (`.exe`) or Android app (`.apk`) from the [Releases page](../../releases). To create a release, push a version tag such as `v0.1.0`; GitHub Actions builds both files and attaches them to that release.
 
-> **Note:** This build is currently **unsigned**. On first launch, Windows SmartScreen may show a warning — click **More info → Run anyway** to proceed. This is expected for early-stage/indie software and does not affect functionality.
+The Android edition is a touch-friendly mobile browser for Android 6.0 and newer. It includes web browsing, address/search, back and forward navigation, reload, home, and page sharing. It is a native Android WebView app; desktop-only features such as Chrome extension loading and the desktop password manager are not included in this first mobile edition.
+
+> **Windows note:** The Windows installer is currently unsigned. Windows SmartScreen may show a warning on first launch.
 
 ---
 
@@ -68,8 +70,8 @@ Grab the latest installer from the [Releases page](../../releases).
 
 ```bash
 # Clone the repo
-git clone https://github.com/<mrsantanu21>/triasic-browser.git
-cd triasic-browser
+git clone https://github.com/mrsantanu21/TriasicBrowser.git
+cd TriasicBrowser
 
 # Install dependencies
 npm install
@@ -77,11 +79,29 @@ npm install
 # Run in development mode
 npm run dev
 
-# Build a production installer
+# Build a Windows installer locally
+npm run package:win
+
+# Build the Electron app without packaging it
 npm run build
 ```
 
-The packaged installer will be output to the `dist/` folder.
+The Windows installer will be output to the `dist/` folder. To publish it for download, push a version tag to GitHub:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The `Build and publish releases` workflow runs on GitHub Actions for each version tag. It attaches the Windows `.exe` and Android `.apk` to the GitHub Release. The APK is a debug-signed build for direct installation; install it on Android by opening the downloaded APK and allowing installs from that source if prompted.
+
+The mobile app can also be built from the `android/` project with Android SDK platform 36, Java 17, and Gradle 8.13:
+
+```bash
+gradle --no-daemon -p android :app:assembleDebug
+```
+
+The APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 ---
 
@@ -99,6 +119,12 @@ The packaged installer will be output to the `dist/` folder.
 - [ ] macOS and Linux packaged builds
 - [ ] Broader Chrome extension (MV3) compatibility
 - [ ] Automated E2E test suite (Playwright)
+
+---
+
+## 📄 License
+
+*Add your chosen license here (e.g. MIT).*
 
 ---
 

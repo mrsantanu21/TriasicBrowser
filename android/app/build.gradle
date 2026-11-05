@@ -1,0 +1,16 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.triasicbrowser.app'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.triasicbrowser.app'
+        minSdk 23
+        targetSdk 34
+        versionCode (project.findProperty('versionCode') ?: '1').toString().toInteger()
+        versionName (project.findProperty('versionName') ?: '0.1.0').toString()
+    }
+}

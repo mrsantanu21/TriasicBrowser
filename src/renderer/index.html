@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- CSP for the shell UI — tightened, only allows our own scripts/styles and Google Fonts -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               img-src 'self' data: blob:;
+               style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+               font-src https://fonts.gstatic.com;
+               script-src 'self';"
+    />
+    <title>Triasic Browser</title>
+    <link rel="icon" type="image/png" href="./src/assets/logo.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
