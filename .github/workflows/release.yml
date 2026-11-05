@@ -66,9 +66,7 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          gradle --no-daemon -p android :app:assembleDebug \
-            -PversionName="$VERSION" \
-            -PversionCode="$GITHUB_RUN_NUMBER"
+          gradle --no-daemon -p android :app:assembleDebug
           mkdir -p release-assets
           cp android/app/build/outputs/apk/debug/app-debug.apk \
             "release-assets/Triasic-Browser-Android-${VERSION}.apk"
