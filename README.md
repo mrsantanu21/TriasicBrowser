@@ -35,6 +35,10 @@ The Android edition is a touch-friendly mobile browser for Android 6.0 and newer
 
 > **Windows note:** The Windows installer is currently unsigned. Windows SmartScreen may show a warning on first launch.
 
+## 🎨 Official app icon
+
+The supplied Triasic logo is used in the desktop browser UI and favicon, as well as the packaged Windows executable and installer, macOS/Linux app packages, and Android launcher icon. Platform-specific icon sizes are generated from `src/renderer/src/assets/logo.png` into `build/` and the Android `mipmap-*` resource folders.
+
 ---
 
 ## ⌨️ Keyboard Shortcuts

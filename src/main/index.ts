@@ -16,7 +16,7 @@
  * WebContentsView for the window that fired the event.
  */
 import { app, ipcMain, BrowserWindow, session, dialog } from 'electron'
-import { createWindow, getContextFromSender, getContext, createTab, activateTab, closeTab, getTabs, updateWindowBounds, snapshotTabs, listRecentlyClosedWindows, takeRecentlyClosedWindow } from './windows/WindowManager'
+import { createWindow, getContextFromSender, getContext, createTab, activateTab, closeTab, getTabs, updateWindowBounds, snapshotTabs, listRecentlyClosedWindows, takeRecentlyClosedWindow, APP_ICON_PATH } from './windows/WindowManager'
 import type { TabWindowSnapshot } from '../shared/types'
 import {
   hookSession,
@@ -230,6 +230,8 @@ ipcMain.on('updater:install', () => installUpdate())
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   log.info('[TriasicBrowser] Starting application...')
+  if (process.platform === 'win32') app.setAppUserModelId('com.triasicbrowser.app')
+  if (process.platform === 'darwin') app.dock?.setIcon(APP_ICON_PATH)
   initAutoUpdater()
 
   // Load last session (if any)

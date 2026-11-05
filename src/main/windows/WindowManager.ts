@@ -17,6 +17,9 @@ import { randomUUID } from 'node:crypto'
 import type { PageState, Tab, TabGroup, TabSnapshot, TabWindowSnapshot } from '../../shared/types'
 
 const isDev = !app.isPackaged
+export const APP_ICON_PATH = app.isPackaged
+  ? join(process.resourcesPath, 'triasic-icon.png')
+  : join(app.getAppPath(), 'build', 'icon.png')
 
 /** Pixels reserved for titlebar, toolbar, and the horizontal tab strip. */
 export const TOOLBAR_HEIGHT = 108
@@ -68,6 +71,7 @@ export function createWindow(options: { incognito?: boolean; initialUrl?: string
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: isIncognito ? '#0d0a14' : '#0a0a0a',
+    icon: APP_ICON_PATH,
     show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
